@@ -11,19 +11,11 @@
 	{
 		private const int TIMEOUT_SECONDS = 30;
 
-		private readonly string _securityKey;
 		private readonly object _lock = new object();
 		private readonly ConcurrentDictionary<string, Service> _services
 			= new ConcurrentDictionary<string, Service>(StringComparer.OrdinalIgnoreCase);
 
 		private bool _isInitialized;
-
-		public ServiceCache(string securityKey)
-		{
-			if (string.IsNullOrWhiteSpace(securityKey))
-				throw new ArgumentException("SecurityKey can't be empty.");
-			_securityKey = securityKey;
-		}
 
 		public DateTime LastUpdate { get; private set; }
 
@@ -36,6 +28,9 @@
 
 			lock (_lock)
 			{
+				if (_isInitialized)
+					return;
+
 				Initialize(dms, logger);
 			}
 		}
@@ -57,9 +52,25 @@
 			}
 		}
 
+		public void UpdateAlarm(int agentId, int serviceId, AlarmLevel newLevel)
+		{
+			var key = serviceId.ToString();
+			if (_services.TryGetValue(key, out var existing))
+			{
+				_services[key] = new Service
+				{
+					Id = existing.Id,
+					AgentId = existing.AgentId,
+					Name = existing.Name,
+					Alarm = newLevel,
+					ViewIds = existing.ViewIds,
+				};
+			}
+		}
+
 		private void Initialize(IDms dms, IGQILogger logger)
 		{
-			logger?.Information($"{_securityKey} - Initializing.");
+			logger?.Information("ServiceCache - Initializing.");
 
 			var services = dms.GetServices()
 				.Where(s => !s.AdvancedSettings.IsTemplate)
@@ -79,12 +90,12 @@
 
 			_isInitialized = true;
 			LastUpdate = DateTime.UtcNow;
-			logger?.Information($"{_securityKey} - Initializing done. Services: {_services.Count}");
+			logger?.Information($"ServiceCache - Initializing done. Services: {_services.Count}");
 		}
 
 		private void UpdateData(IDms dms, IGQILogger logger)
 		{
-			logger?.Information($"{_securityKey} - Fetching update.");
+			logger?.Information("ServiceCache - Fetching update.");
 
 			try
 			{
@@ -100,7 +111,7 @@
 
 				foreach (var svc in updatedServices.Values)
 				{
-					var newService = new Service
+					_services[svc.Id.ToString()] = new Service
 					{
 						Id = svc.Id,
 						AgentId = svc.AgentId,
@@ -108,37 +119,15 @@
 						Alarm = svc.GetState().Level,
 						ViewIds = svc.Views.Select(v => v.Id).ToList(),
 					};
-
-					if (!_services.TryGetValue(svc.Id.ToString(), out var existing) || !ServiceEquals(existing, newService))
-						_services[svc.Id.ToString()] = newService;
 				}
 
 				LastUpdate = DateTime.UtcNow;
-				logger?.Information($"{_securityKey} - Update done. Services: {_services.Count}");
+				logger?.Information($"ServiceCache - Update done. Services: {_services.Count}");
 			}
 			catch (Exception ex)
 			{
-				logger?.Error($"{_securityKey} - Error during update: {ex.Message}");
+				logger?.Error($"ServiceCache - Error during update: {ex.Message}");
 			}
-		}
-
-		private bool ServiceEquals(Service s1, Service s2)
-		{
-			if (s1 == null || s2 == null)
-				return false;
-			if (s1.Id != s2.Id)
-				return false;
-			if (!string.Equals(s1.Name, s2.Name, StringComparison.Ordinal))
-				return false;
-			if (s1.Alarm != s2.Alarm)
-				return false;
-			if (s1.AgentId != s2.AgentId)
-				return false;
-			if (s1.ViewIds == null && s2.ViewIds == null)
-				return true;
-			if (s1.ViewIds == null || s2.ViewIds == null)
-				return false;
-			return s1.ViewIds.SequenceEqual(s2.ViewIds);
 		}
 	}
 }
