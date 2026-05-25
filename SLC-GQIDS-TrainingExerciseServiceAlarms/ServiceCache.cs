@@ -12,6 +12,7 @@
 		private const int TIMEOUT_SECONDS = 30;
 
 		private readonly object _lock = new object();
+
 		private readonly ConcurrentDictionary<string, Service> _services
 			= new ConcurrentDictionary<string, Service>(StringComparer.OrdinalIgnoreCase);
 
@@ -20,6 +21,9 @@
 		public DateTime LastUpdate { get; private set; }
 
 		public IEnumerable<Service> Services => _services.Values;
+
+		public bool TryGetService(int agentId, int serviceId, out Service service)
+				=> _services.TryGetValue($"{agentId}/{serviceId}", out service);
 
 		public void EnsureInitialized(IDms dms, IGQILogger logger)
 		{
@@ -54,7 +58,7 @@
 
 		public void UpdateAlarm(int agentId, int serviceId, AlarmLevel newLevel)
 		{
-			var key = serviceId.ToString();
+			var key = $"{agentId}/{serviceId}";
 			if (_services.TryGetValue(key, out var existing))
 			{
 				_services[key] = new Service
@@ -78,7 +82,8 @@
 
 			foreach (var svc in services)
 			{
-				_services[svc.Id.ToString()] = new Service
+				string key = $"{svc.AgentId}/{svc.Id}";
+				_services[key] = new Service
 				{
 					Id = svc.Id,
 					AgentId = svc.AgentId,
@@ -103,15 +108,18 @@
 					.Where(s => !s.AdvancedSettings.IsTemplate)
 					.ToDictionary(s => s.Id);
 
-				var currentIds = _services.Keys.Select(int.Parse).ToHashSet();
-				var updatedIds = updatedServices.Keys.ToHashSet();
+				var currentKeys = _services.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+				var updatedKeys = updatedServices.Values
+					.Select(s => $"{s.AgentId}/{s.Id}")
+					.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-				foreach (var id in currentIds.Except(updatedIds))
-					_services.TryRemove(id.ToString(), out _);
+				foreach (var keyToRemove in currentKeys.Except(updatedKeys))
+					_services.TryRemove(keyToRemove, out _);
 
 				foreach (var svc in updatedServices.Values)
 				{
-					_services[svc.Id.ToString()] = new Service
+					string key = $"{svc.AgentId}/{svc.Id}";
+					_services[key] = new Service
 					{
 						Id = svc.Id,
 						AgentId = svc.AgentId,

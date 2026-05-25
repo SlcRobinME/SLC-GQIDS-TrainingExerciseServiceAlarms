@@ -5,6 +5,7 @@ namespace SLCGQIDSTrainingExerciseServiceAlarms
 	using Skyline.DataMiner.Analytics.GenericInterface;
 	using Skyline.DataMiner.Core.DataMinerSystem.Common;
 	using Skyline.DataMiner.Net.Messages;
+	using AlarmLevel = Skyline.DataMiner.Core.DataMinerSystem.Common.AlarmLevel;
 
 	[GQIMetaData(Name = "SLC-GQIDS-TrainingExerciseServiceAlarms")]
 	public sealed class SLCGQIDSTrainingExerciseServiceAlarms :
@@ -61,8 +62,6 @@ namespace SLCGQIDSTrainingExerciseServiceAlarms
 				.Select(svc => BuildRow(svc))
 				.ToArray();
 
-			_logger?.Information($"Returning {rows.Length} rows for viewId={_viewId}");
-
 			return new GQIPage(rows) { HasNextPage = false };
 		}
 
@@ -93,22 +92,21 @@ namespace SLCGQIDSTrainingExerciseServiceAlarms
 
 		private void Watcher_OnChanged(object sender, ServiceStateEventMessage e)
 		{
-			var serviceKey = $"{e.DataMinerID}/{e.ElementID}";
-
-			var existing = _cache.Services.FirstOrDefault(s => $"{s.AgentId}/{s.Id}" == serviceKey);
-			if (existing == null || existing.Alarm.ToString() == e.Level.ToString())
+			if (!_cache.TryGetService(e.DataMinerID, e.ElementID, out var existing))
 				return;
 
-			_logger?.Debug($"{nameof(Watcher_OnChanged)}: {serviceKey} - {e.Level}");
-
-			_cache.UpdateAlarm(e.DataMinerID, e.ElementID, (Skyline.DataMiner.Core.DataMinerSystem.Common.AlarmLevel)e.Level);
-
-			var updated = _cache.Services.FirstOrDefault(s => $"{s.AgentId}/{s.Id}" == serviceKey);
-			if (updated == null || !IsServiceInView(updated, _viewId))
+			if (existing.Alarm.ToString() == e.Level.ToString())
 				return;
 
-			var updatedRow = BuildRow(updated);
-			_updater?.UpdateRow(updatedRow);
+			_cache.UpdateAlarm(e.DataMinerID, e.ElementID, (AlarmLevel)e.Level);
+
+			if (!_cache.TryGetService(e.DataMinerID, e.ElementID, out var updated))
+				return;
+
+			if (!IsServiceInView(updated, _viewId))
+				return;
+
+			_updater?.UpdateRow(BuildRow(updated));
 		}
 
 		private GQIRow BuildRow(Service svc)
