@@ -28,10 +28,11 @@
 			_rowCache = rowCache;
 			_cacheLock = cacheLock;
 			_updater = updater;
-
 			_connection = dms.GetConnection();
 			_connection.OnNewMessage += OnEvent;
 			_connection.AddSubscription(_setId, new SubscriptionFilter(typeof(ServiceStateEventMessage)));
+
+			LoadServicesFromDms();
 		}
 
 		public void LoadServicesFromDms()
