@@ -3,8 +3,6 @@ namespace ServiceAlarmsSCO
 	using System.Collections.Generic;
 	using System.Linq;
 	using Skyline.DataMiner.Analytics.GenericInterface;
-	using Skyline.DataMiner.Net;
-	using Skyline.DataMiner.Net.Messages;
 
 	/// <summary>
 	/// Represents a data source.
@@ -17,76 +15,56 @@ namespace ServiceAlarmsSCO
         , IGQIUpdateable
         , IGQIOnDestroy
     {
-        private static string ServiceKey(int dmaId, int elementID) => $"{dmaId}/{elementID}";
-
-        private static string SeverityToLabel(AlarmLevel severity)
-        {
-            switch (severity)
-            {
-                case AlarmLevel.Normal: return "Normal";
-                case AlarmLevel.Warning: return "Warning";
-                case AlarmLevel.Minor: return "Minor";
-                case AlarmLevel.Major: return "Major";
-                case AlarmLevel.Critical: return "Critical";
-                default: return "Undefined";
-            }
-        }
-
-        private readonly GQIIntArgument _viewIdArg = new GQIIntArgument("View ID")
+		private readonly GQIIntArgument _viewIdArg = new GQIIntArgument("View ID")
         {
             IsRequired = false,
             DefaultValue = 0,
         };
 
-        private readonly GQIStringColumn _nameColumn = new GQIStringColumn("Name");
-        private readonly GQIStringColumn _alarmState = new GQIStringColumn("Alarm state");
+		private readonly GQIStringColumn _nameColumn = new GQIStringColumn("Name");
+		private readonly GQIStringColumn _alarmState = new GQIStringColumn("Alarm state");
+		private readonly Dictionary<string, GQIRow> _rowCache = new Dictionary<string, GQIRow>();
+		private readonly object _cacheLock = new object();
 
-        private GQIDMS _dms;
-        private int _viewId;
-        private IGQIUpdater _updater;
-        private IGQILogger _logger;
-        private readonly Dictionary<string, GQIRow> _rowCache = new Dictionary<string, GQIRow>();
-        private readonly object _cacheLock = new object();
+		private GQIDMS _dms;
+		private int _viewId;
+		private IGQIUpdater _updater;
+		private AlarmEventHandler _watcher;
 
-        public OnInitOutputArgs OnInit(OnInitInputArgs args)
+		public OnInitOutputArgs OnInit(OnInitInputArgs args)
         {
             _dms = args.DMS;
-            _logger = args.Logger;
             return new OnInitOutputArgs();
         }
 
-        public GQIArgument[] GetInputArguments()
+		public GQIArgument[] GetInputArguments()
         {
             return new GQIArgument[] { _viewIdArg };
-
         }
 
-        public OnArgumentsProcessedOutputArgs OnArgumentsProcessed(OnArgumentsProcessedInputArgs args)
+		public OnArgumentsProcessedOutputArgs OnArgumentsProcessed(OnArgumentsProcessedInputArgs args)
         {
             _viewId = args.GetArgumentValue(_viewIdArg);
             return new OnArgumentsProcessedOutputArgs();
         }
 
-        public GQIColumn[] GetColumns() => new GQIColumn[]
+		public GQIColumn[] GetColumns() => new GQIColumn[]
         {
             _nameColumn,
             _alarmState,
         };
 
-        public void OnStartUpdates(IGQIUpdater updater)
+		public void OnStartUpdates(IGQIUpdater updater)
         {
 			_updater = updater;
-
-			var connection = _dms.GetConnection();
-			connection.OnNewMessage += OnEvent;
-			connection.Subscribe(new SubscriptionFilter(typeof(ServiceStateEventMessage)));
+			_watcher = new AlarmEventHandler(_dms, _viewId, _rowCache, _cacheLock,updater);
 		}
 
-        public GQIPage GetNextPage(GetNextPageInputArgs args)
+		public GQIPage GetNextPage(GetNextPageInputArgs args)
         {
             if (_rowCache.Count == 0)
             {
-                LoadServicesFromDms();
+				_watcher.LoadServicesFromDms();
             }
 
             List<GQIRow> rows;
@@ -102,87 +80,16 @@ namespace ServiceAlarmsSCO
             };
         }
 
-        public void OnStopUpdates()
+		public void OnStopUpdates()
         {
-			var connection = _dms.GetConnection();
-			connection.OnNewMessage -= OnEvent;
-			connection.Unsubscribe();
+			_watcher?.Dispose();
+			_watcher = null;
 			_updater = null;
 		}
 
-        public OnDestroyOutputArgs OnDestroy(OnDestroyInputArgs args)
+		public OnDestroyOutputArgs OnDestroy(OnDestroyInputArgs args)
         {
             return new OnDestroyOutputArgs();
         }
-
-        private void LoadServicesFromDms()
-		{
-			var request = new GetLiteServiceInfo
-			{
-				ViewID = _viewId == 0 ? int.MaxValue : _viewId,
-			};
-			var response = _dms.SendMessages(request);
-
-			lock (_cacheLock)
-			{
-				_rowCache.Clear();
-				foreach (var msg in response)
-				{
-					if (!(msg is LiteServiceInfoEvent svc))
-						continue;
-
-					var key = ServiceKey(svc.DataMinerID, svc.ElementID);
-
-					var stateRequest = new GetServiceStateMessage
-					{
-						DataMinerID = svc.DataMinerID,
-						ServiceID = svc.ElementID,
-					};
-
-					var stateResponse = _dms.SendMessages(stateRequest);
-					var alarmState = "Undefined";
-
-					foreach (var stateMsg in stateResponse)
-						{
-						if (stateMsg is ServiceStateEventMessage state)
-							{
-							alarmState = SeverityToLabel(state.Level);
-							break;
-							}
-						}
-
-					var row = new GQIRow(key, new GQICell[]
-					{
-						new GQICell {Value = svc.Name},
-						new GQICell {Value = alarmState},
-					});
-					_rowCache[key] = row;
-				}
-			}
-		}
-
-        private void OnEvent(object sender, NewMessageEventArgs e)
-		{
-			if (!(e.Message is ServiceStateEventMessage stateMsg))
-				return;
-
-			var key = ServiceKey(stateMsg.DataMinerID, stateMsg.ServiceID);
-			var newAlarmState = SeverityToLabel(stateMsg.Level);
-
-			lock (_cacheLock)
-			{
-				if (_rowCache.TryGetValue(key, out var existingRow))
-				{
-					var updatedRow = new GQIRow(existingRow.Key, new GQICell[]
-					{
-						new GQICell { Value = existingRow.Cells[0].Value },
-						new GQICell { Value = newAlarmState },
-					});
-
-					_rowCache[key] = updatedRow;
-					_updater?.UpdateRow(updatedRow);
-				}
-			}
-		}
 	}
 }
