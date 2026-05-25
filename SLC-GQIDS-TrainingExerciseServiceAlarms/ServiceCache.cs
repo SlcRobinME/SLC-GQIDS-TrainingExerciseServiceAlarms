@@ -9,7 +9,7 @@
 
 	public class ServiceCache
 	{
-		private const int TIMEOUT_SECONDS = 30;
+		private const int TIMEOUT_SECONDS = 60;
 
 		private readonly object _lock = new object();
 
@@ -61,14 +61,7 @@
 			var key = $"{agentId}/{serviceId}";
 			if (_services.TryGetValue(key, out var existing))
 			{
-				_services[key] = new Service
-				{
-					Id = existing.Id,
-					AgentId = existing.AgentId,
-					Name = existing.Name,
-					Alarm = newLevel,
-					ViewIds = existing.ViewIds,
-				};
+				existing.Alarm = newLevel;
 			}
 		}
 
