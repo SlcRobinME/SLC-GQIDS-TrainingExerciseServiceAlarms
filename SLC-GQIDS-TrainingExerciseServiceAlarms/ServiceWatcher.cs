@@ -12,10 +12,7 @@
 
 		internal ServiceWatcher(GQIDMS dms)
 		{
-			_connection = dms.GetConnection();
-			if (_connection == null)
-				throw new GenIfException("Could not create a connection.");
-
+			_connection = dms.GetConnection() ?? throw new GenIfException("Could not create a connection.");
 			var subscriptionFilter = new SubscriptionFilter(typeof(ServiceStateEventMessage));
 			_connection.OnNewMessage += Connection_OnNewMessage;
 			_connection.AddSubscription(_setId, subscriptionFilter);

@@ -59,10 +59,17 @@
 		public void UpdateAlarm(int agentId, int serviceId, AlarmLevel newLevel)
 		{
 			var key = $"{agentId}/{serviceId}";
-			if (_services.TryGetValue(key, out var existing))
+			if (!_services.TryGetValue(key, out var existing))
+				return;
+
+			_services[key] = new Service
 			{
-				existing.Alarm = newLevel;
-			}
+				Id = existing.Id,
+				AgentId = existing.AgentId,
+				Name = existing.Name,
+				ViewIds = existing.ViewIds,
+				Alarm = newLevel,
+			};
 		}
 
 		private void Initialize(IDms dms, IGQILogger logger)
