@@ -47,16 +47,16 @@
 				_rowCache.Clear();
 				_elementToServiceMap.Clear();
 
-				foreach (var msg in response)
+				foreach (var message in response)
 				{
-					if (!(msg is LiteServiceInfoEvent svc))
+					if (!(message is LiteServiceInfoEvent service))
 						continue;
 
-					var key = ServiceKey(svc.HostingAgentID,svc.ElementID);
+					var key = ServiceKey(service.HostingAgentID, service.ElementID);
 
-					if(svc.Children != null)
+					if(service.Children != null)
 					{
-						foreach (var child in svc.Children)
+						foreach (var child in service.Children)
 						{
 							var elementKey = ServiceKey(child.DataMinerID, child.ElementID);
 							_elementToServiceMap[elementKey] = key;
@@ -65,8 +65,8 @@
 
 					var stateRequest = new GetServiceStateMessage
 					{
-						DataMinerID = svc.DataMinerID,
-						ServiceID = svc.ElementID,
+						DataMinerID = service.DataMinerID,
+						ServiceID = service.ElementID,
 					};
 
 					var stateResponse = _dms.SendMessages(stateRequest);
@@ -83,7 +83,7 @@
 
 					var row = new GQIRow(key, new GQICell[]
 					{
-						new GQICell { Value = svc.Name },
+						new GQICell { Value = service.Name },
 						new GQICell { Value = alarmState },
 					});
 					_rowCache[key] = row;
