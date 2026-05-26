@@ -15,6 +15,7 @@
 		private readonly IGQIUpdater _updater;
 		private readonly GQIDMS _dms;
 		private readonly int _viewId;
+		private readonly Dictionary<string, string> _elementToServiceMap = new Dictionary<string, string>();
 
 		public AlarmEventHandler(
 			GQIDMS dms,
@@ -30,9 +31,7 @@
 			_updater = updater;
 			_connection = dms.GetConnection();
 			_connection.OnNewMessage += OnEvent;
-			_connection.AddSubscription(_setId, new SubscriptionFilter(typeof(ServiceStateEventMessage)));
-
-			LoadServicesFromDms();
+			_connection.AddSubscription(_setId, new SubscriptionFilter(typeof(AlarmEventMessage)));
 		}
 
 		public void LoadServicesFromDms()
@@ -46,12 +45,23 @@
 			lock (_cacheLock)
 			{
 				_rowCache.Clear();
+				_elementToServiceMap.Clear();
+
 				foreach (var msg in response)
 				{
 					if (!(msg is LiteServiceInfoEvent svc))
 						continue;
 
-					var key = Helpers.ServiceKey(svc.HostingAgentID, svc.ElementID);
+					var key = ServiceKey(svc.HostingAgentID,svc.ElementID);
+
+					if(svc.Children != null)
+					{
+						foreach (var child in svc.Children)
+						{
+							var elementKey = ServiceKey(child.DataMinerID, child.ElementID);
+							_elementToServiceMap[elementKey] = key;
+						}
+					}
 
 					var stateRequest = new GetServiceStateMessage
 					{
@@ -66,15 +76,15 @@
 					{
 						if (stateMsg is ServiceStateEventMessage state)
 						{
-							alarmState = Helpers.SeverityToLabel(state.Level);
+							alarmState = state.Level.ToString();
 							break;
 						}
 					}
 
 					var row = new GQIRow(key, new GQICell[]
 					{
-					new GQICell { Value = svc.Name },
-					new GQICell { Value = alarmState },
+						new GQICell { Value = svc.Name },
+						new GQICell { Value = alarmState },
 					});
 					_rowCache[key] = row;
 				}
@@ -86,32 +96,43 @@
 				if (_connection != null)
 				{
 					_connection.OnNewMessage -= OnEvent;
-					_connection.RemoveSubscription(_setId, new SubscriptionFilter(typeof(ServiceStateEventMessage)));
+					_connection.RemoveSubscription(_setId, new SubscriptionFilter(typeof(AlarmEventMessage)));
 					_connection.Dispose();
 				}
 		}
 
+		private static string ServiceKey(int dmaId, int elementID) => $"{dmaId}/{elementID}";
+
 		private void OnEvent(object sender, NewMessageEventArgs e)
 		{
-			if (!(e.Message is ServiceStateEventMessage stateMsg))
+			if (!(e.Message is AlarmEventMessage alarmMessage))
+			{
 				return;
+			}
 
-			var key = Helpers.ServiceKey(stateMsg.HostingAgentID, stateMsg.ServiceID);
-			var newAlarmState = Helpers.SeverityToLabel(stateMsg.Level);
+			var key = ServiceKey(alarmMessage.HostingAgentID, alarmMessage.ElementID);
+			var newAlarmState = string.IsNullOrEmpty(alarmMessage.Severity) ? "Undefined" : alarmMessage.Severity;
 
 			lock (_cacheLock)
 			{
-				if (_rowCache.TryGetValue(key, out var existingRow))
+				if (!_elementToServiceMap.TryGetValue(key, out var serviceKey))
 				{
-					var updatedRow = new GQIRow(existingRow.Key, new GQICell[]
-					{
+					return;
+				}
+
+				if (!_rowCache.TryGetValue(serviceKey, out var existingRow))
+				{
+					return;
+				}
+
+				var updatedRow = new GQIRow(existingRow.Key, new GQICell[]
+				{
 					new GQICell { Value = existingRow.Cells[0].Value },
 					new GQICell { Value = newAlarmState },
-					});
+				});
 
-					_rowCache[key] = updatedRow;
-					_updater?.UpdateRow(updatedRow);
-				}
+				_rowCache[serviceKey] = updatedRow;
+				_updater?.UpdateRow(updatedRow);
 			}
 		}
 	}

@@ -30,12 +30,10 @@ namespace ServiceAlarmsSCO
 		private int _viewId;
 		private IGQIUpdater _updater;
 		private AlarmEventHandler _watcher;
-		private IGQILogger _logger;
 
 		public OnInitOutputArgs OnInit(OnInitInputArgs args)
         {
             _dms = args.DMS;
-            _logger = args.Logger;
             return new OnInitOutputArgs();
         }
 
@@ -59,8 +57,7 @@ namespace ServiceAlarmsSCO
 		public void OnStartUpdates(IGQIUpdater updater)
         {
 			_updater = updater;
-			_watcher = new AlarmEventHandler(_dms, _viewId, _rowCache, _cacheLock,updater,_logger);
-			_logger?.Information("OnStartUpdates called");
+			_watcher = new AlarmEventHandler(_dms, _viewId, _rowCache, _cacheLock,updater);
 		}
 
 		public GQIPage GetNextPage(GetNextPageInputArgs args)
