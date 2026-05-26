@@ -9,7 +9,7 @@
 
 	public class ServiceCache
 	{
-		private const int TIMEOUT_SECONDS = 60;
+		private const int TIMEOUT_SECONDS = 300;
 
 		private readonly object _lock = new object();
 

@@ -1,6 +1,5 @@
 namespace SLCGQIDSTrainingExerciseServiceAlarms
 {
-	using System;
 	using System.Linq;
 	using Skyline.DataMiner.Analytics.GenericInterface;
 	using Skyline.DataMiner.Core.DataMinerSystem.Common;
@@ -29,10 +28,10 @@ namespace SLCGQIDSTrainingExerciseServiceAlarms
 
 		private GQIDMS _dMS;
 		private IDms _dms;
-		private int _viewId;
 		private IGQIUpdater _updater;
 		private IGQILogger _logger;
 		private ServiceWatcher _watcher;
+		private int _viewId;
 
 		public GQIColumn[] GetColumns() => new GQIColumn[] { _colName, _colAlarmState };
 
