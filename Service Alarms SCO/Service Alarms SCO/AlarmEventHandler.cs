@@ -52,14 +52,14 @@
 					if (!(message is LiteServiceInfoEvent service))
 						continue;
 
-					var key = ServiceKey(service.HostingAgentID, service.ElementID);
+					var serviceKey = ServiceKey(service.HostingAgentID, service.ElementID);
 
 					if(service.Children != null)
 					{
 						foreach (var child in service.Children)
 						{
 							var elementKey = ServiceKey(child.DataMinerID, child.ElementID);
-							_elementToServiceMap[elementKey] = key;
+							_elementToServiceMap[elementKey] = serviceKey;
 						}
 					}
 
@@ -81,12 +81,12 @@
 						}
 					}
 
-					var row = new GQIRow(key, new GQICell[]
+					var row = new GQIRow(serviceKey, new GQICell[]
 					{
 						new GQICell { Value = service.Name },
 						new GQICell { Value = alarmState },
 					});
-					_rowCache[key] = row;
+					_rowCache[serviceKey] = row;
 				}
 			}
 		}
@@ -110,12 +110,12 @@
 				return;
 			}
 
-			var key = ServiceKey(alarmMessage.HostingAgentID, alarmMessage.ElementID);
+			var elementKey = ServiceKey(alarmMessage.HostingAgentID, alarmMessage.ElementID);
 			var newAlarmState = string.IsNullOrEmpty(alarmMessage.Severity) ? "Undefined" : alarmMessage.Severity;
 
 			lock (_cacheLock)
 			{
-				if (!_elementToServiceMap.TryGetValue(key, out var serviceKey))
+				if (!_elementToServiceMap.TryGetValue(elementKey, out var serviceKey))
 				{
 					return;
 				}
