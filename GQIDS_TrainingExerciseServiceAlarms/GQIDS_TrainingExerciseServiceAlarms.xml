@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<DMSScript options="272" xmlns="http://www.skyline.be/automation">
+	<Name>GQIDS_TrainingExerciseServiceAlarms</Name>
+	<Description></Description>
+	<Type>Automation</Type>
+	<Author>DinoFA</Author>
+	<CheckSets>FALSE</CheckSets>
+	<Folder></Folder>
+
+	<Protocols>
+	</Protocols>
+
+	<Memory>
+	</Memory>
+
+	<Parameters>
+	</Parameters>
+
+	<Script>
+		<Exe id="1" type="csharp">
+			<Value><![CDATA[[Project:GQIDS_TrainingExerciseServiceAlarms]]]></Value>
+			<Param type="preCompile">true</Param>
+			<Param type="libraryName">GQIDSTrainingExerciseServiceAlarms</Param>
+			<Message></Message>
+		</Exe>
+	</Script>
+</DMSScript>
